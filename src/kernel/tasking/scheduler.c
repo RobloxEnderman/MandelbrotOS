@@ -9,6 +9,7 @@
 #include <mm/kheap.h>
 #include <mm/pmm.h>
 #include <mm/vmm.h>
+#include <printf.h>
 #include <registers.h>
 #include <stddef.h>
 #include <stdint.h>
@@ -162,7 +163,10 @@ thread_t *sched_new_thread(thread_t *thread, proc_t *parent, uintptr_t addr,
       (uintptr_t)pcalloc(SCHED_STACK_SIZE / PAGE_SIZE) + PHYS_MEM_OFFSET +
       SCHED_STACK_SIZE;
 
-  vec_push(&parent->threads, thread);
+  int i;
+  vec_find(&parent->threads, thread, i);
+  if (i == -1)
+    vec_push(&parent->threads, thread);
 
   if (auto_start)
     sched_enqueue(thread);
@@ -179,8 +183,8 @@ static inline thread_t *sched_get_next_thread(size_t orig_i, int priority,
       index = 0;
 
     thread_t *thread = threads[priority].data[index];
-    if ((thread == get_locals()->current_thread ||
-         LOCK_ACQUIRE(thread->lock))) {
+    if (thread && (thread == get_locals()->current_thread ||
+                   LOCK_ACQUIRE(thread->lock))) {
       *new_index = index;
       return thread;
     }
@@ -194,95 +198,86 @@ static inline thread_t *sched_get_next_thread(size_t orig_i, int priority,
 
 int sched_fork(registers_t *regs) {
   proc_t *old_proc = get_locals()->current_thread->parent;
-  thread_t *old_thread = get_locals()->current_thread;
 
   proc_t *new_proc = sched_new_proc(old_proc, NULL, 1);
   thread_t *new_thread = kcalloc(sizeof(thread_t));
 
   new_thread->regs = *regs;
   new_thread->regs.rax = 0;
-  new_thread->regs.cs = GDT_SEG_UCODE;
-  new_thread->regs.ss = GDT_SEG_UDATA;
   new_thread->parent = new_proc;
-  new_thread->priority = old_thread->priority;
+  new_thread->priority = get_locals()->current_thread->priority;
   new_thread->tid = current_tid++;
-
-  vec_push(&old_proc->children, new_proc);
-  vec_push(&new_proc->threads, new_thread);
-
   new_thread->kernel_stack = (uintptr_t)pcalloc(SCHED_STACK_SIZE / PAGE_SIZE) +
                              PHYS_MEM_OFFSET + SCHED_STACK_SIZE;
 
-  memcpy(new_thread->fpu_storage, old_thread->fpu_storage, 512);
-  memcpy((void *)new_thread->kernel_stack - SCHED_STACK_SIZE,
-         (void *)old_thread->kernel_stack - SCHED_STACK_SIZE, SCHED_STACK_SIZE);
+  memcpy(new_thread->fpu_storage, get_locals()->current_thread->fpu_storage,
+         512);
 
   sched_enqueue(new_thread);
+  vec_push(&old_proc->children, new_proc);
 
   return new_proc->pid;
 }
 
 void sched_destroy_thread(thread_t *thread) {
-  pmm_free_pages((void *)thread->kernel_stack, SCHED_STACK_SIZE / PAGE_SIZE);
-  vec_remove(&threads[thread->priority], thread);
+  pmm_free_pages((void *)thread->kernel_stack - PHYS_MEM_OFFSET -
+                   SCHED_STACK_SIZE,
+                 SCHED_STACK_SIZE / PAGE_SIZE);
+  if (thread->queued)
+    vec_remove(&threads[thread->priority], thread);
   kfree(thread);
 }
 
-void sched_exit(int code) {
-  /* vmm_load_pagemap(&kernel_pagemap); */
+void sched_exit(int code, int crashed) {
+  code |= (crashed) ? 0x400 : 0x200;
+  code |= (crashed) ? ((code - 128) & 0xff) << 24 : (code & 0xff);
 
-  proc_t *current_proc = get_locals()->current_thread->parent;
+  proc_t *proc = get_locals()->current_thread->parent;
+  pagemap_t *old_pagemap = proc->pagemap;
 
-  /* asm volatile("cli"); */
-  /* LOCK(sched_lock); */
+  proc->pagemap = &kernel_pagemap;
+  vmm_load_pagemap(&kernel_pagemap);
 
-  /* for (size_t i = 0; i < (size_t)current_proc->threads.length; i++) */
-  /* sched_destroy_thread(current_proc->threads.data[i]); */
-  /* kfree(current_proc->threads.data); */
+  for (size_t i = 0; i < FDS_COUNT; i++)
+  if (proc->fds[i]) {
+  vfs_close(proc->fds[i]->file);
+  kfree(proc->fds[i]);
+  }
+  kfree(proc->fds);
 
-  /* for (size_t i = 0; i < FDS_COUNT; i++)  */
-  /* if (current_proc->fds[i]) { */
-  /* vfs_close(current_proc->fds[i]->file); */
-  /* kfree(current_proc->fds[i]); */
-  /* } */
-  /* kfree(current_proc->fds); */
+  vmm_destroy_pagemap(old_pagemap);
 
-  /* printf("FDS closed"); */
+  LOCKED_WRITE(proc->status, code);
+  event_trigger(proc->event);
 
-  /* current_proc->status = code | 0x200; */
-  event_trigger(current_proc->event);
-
-  /* vmm_destroy_pagemap(current_proc->pagemap); */
-
-  /* UNLOCK(sched_lock); */
-
-  /* vec_remove(&threads[get_locals()->current_thread->priority],
-   * get_locals()->current_thread); */
-
-  while (1)
-    ;
-
+  asm volatile("cli");
+  vec_remove(&threads[get_locals()->current_thread->priority],
+             get_locals()->current_thread);
+  pmm_free_pages((void *)(get_locals()->current_thread->kernel_stack - PHYS_MEM_OFFSET - SCHED_STACK_SIZE), SCHED_STACK_SIZE / PAGE_SIZE);
+  kfree(get_locals()->current_thread);
+  get_locals()->current_thread = NULL;
   sched_await();
 }
 
 int sched_waitpid(ssize_t pid, int *status, int options) {
+  proc_t *proc = get_locals()->current_thread->parent;
+  proc_t *child = NULL;
+
   event_t **events;
   size_t events_len;
-  proc_t *current_proc = get_locals()->current_thread->parent;
-  proc_t *child;
 
   if (pid == -1) {
-    events_len = current_proc->children.length;
-    events = kmalloc(sizeof(event_t) * events_len);
+    events = kcalloc(proc->children.length * sizeof(event_t *));
+    events_len = proc->children.length;
     for (size_t i = 0; i < events_len; i++)
-      events[i] = current_proc->children.data[i]->event;
+      events[i] = proc->children.data[i]->event;
   } else if (pid > 0) {
+    events = kcalloc(sizeof(event_t *));
     events_len = 1;
-    events = kmalloc(sizeof(event_t));
-    for (size_t i = 0; i < (size_t)current_proc->children.length; i++)
-      if (current_proc->children.data[i]->pid == (size_t)pid) {
-        *events = current_proc->children.data[i]->event;
-        child = current_proc->children.data[i];
+    for (size_t i = 0; i < (size_t)proc->children.length; i++)
+      if (proc->children.data[i]->pid == (size_t)pid) {
+        *events = proc->children.data[i]->event;
+        child = proc->children.data[i];
       }
     if (!*events)
       return -ECHILD;
@@ -294,21 +289,19 @@ int sched_waitpid(ssize_t pid, int *status, int options) {
   if (which == -1)
     return 0;
   if (!child)
-    child = current_proc->children.data[which];
+    child = proc->children.data[which];
 
-  if (!child) {
-    while (1)
-      ;
-  }
+  int ret = child->pid;
 
-  /* if (status) */
-  /* *status = child->status; */
+  if (status)
+  *status = child->status;
 
-  /* vec_remove(&current_proc->children, child); */
+  vec_remove(&proc->children, child);
+  kfree(child->event);
+  kfree(child);
+  kfree(events);
 
-  /* kfree(child); */
-
-  return child->pid;
+  return ret;
 }
 
 void schedule(uint64_t rsp) {
@@ -492,14 +485,11 @@ int sched_run_program(char *path, char *argv[], char *env[], char *stdin,
 
     proc->mmap_top = SCHED_MMAP_TOP;
     proc->stack_top = SCHED_STACK_TOP;
-    proc->pid = current_pid++;
-    proc->pagemap = new_pagemap;
     proc->mmaped_len = 0;
+    proc->pagemap = new_pagemap;
 
     sched_new_thread(thread, proc, entry, thread->priority, thread->uid,
                      thread->gid, 0);
-
-    LOCK(sched_lock);
 
     sched_load_args_to_stack(
       thread,
@@ -510,8 +500,7 @@ int sched_run_program(char *path, char *argv[], char *env[], char *stdin,
     vmm_load_pagemap(new_pagemap);
     vmm_destroy_pagemap(old_pagemap);
 
-    UNLOCK(sched_lock);
-
+    asm volatile("cli");
     switch_and_run_stack((uintptr_t)&thread->regs);
   }
 

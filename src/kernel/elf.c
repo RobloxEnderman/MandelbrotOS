@@ -31,7 +31,7 @@ char elf_ident[4] = {0x7f, 'E', 'L', 'F'};
 
 uint8_t elf_run_binary(char *path, pagemap_t *pagemap, uintptr_t *entry) {
   fs_file_t *file = vfs_open(path);
-  uint8_t *buffer = kmalloc(file->length);
+  uint8_t *buffer = kcalloc(file->length);
   vfs_read(file, buffer, 0, file->length);
 
   elf_header_t *header = (elf_header_t *)buffer;
@@ -45,40 +45,17 @@ uint8_t elf_run_binary(char *path, pagemap_t *pagemap, uintptr_t *entry) {
 
   for (size_t i = 0; i < elf_header->prog_head_count; i++) {
     if (prog_header[i].type == ELF_HEAD_LOAD) {
-      void *addr = pcalloc(ROUND_UP(
-        (prog_header[i].virt_addr & (PAGE_SIZE - 1)) + prog_header[i].mem_size,
-        PAGE_SIZE));
-
-      for (size_t j = 0;
-           j < ROUND_UP((prog_header[i].virt_addr & (PAGE_SIZE - 1)) +
-                          prog_header[i].mem_size,
-                        PAGE_SIZE) *
-                 PAGE_SIZE;
-           j += PAGE_SIZE)
-        vmm_map_page(pagemap, (uintptr_t)addr + j, prog_header->virt_addr + j,
-                     (prog_header[i].flags & PF_W) ? 0b111 : 0b101);
-
-      mmap_range_t *mmap_range = kmalloc(sizeof(mmap_range_t));
-      *mmap_range = (mmap_range_t){
-        .file = NULL,
-        .flags = MAP_FIXED | MAP_ANON,
-        .length = ROUND_UP((prog_header[i].virt_addr & (PAGE_SIZE - 1)) +
-                             prog_header[i].mem_size,
-                           PAGE_SIZE) *
-                  PAGE_SIZE,
-        .offset = 0,
-        .prot = PROT_READ | PROT_EXEC | (prog_header[i].flags & PF_W)
-                  ? PROT_WRITE
-                  : 0,
-        .phys_addr = (uintptr_t)addr,
-        .virt_addr = prog_header[i].virt_addr,
-      };
-
-      vec_push(&pagemap->ranges, mmap_range);
-
-      memcpy(((char *)((uintptr_t)addr + PHYS_MEM_OFFSET)) +
-               (prog_header[i].virt_addr & (PAGE_SIZE - 1)),
-             buffer + prog_header[i].offset, prog_header[i].file_size);
+      size_t misalign = prog_header[i].phys_addr & (PAGE_SIZE - 1);
+      void *mem =
+        pcalloc(ROUND_UP(misalign + prog_header[i].mem_size, PAGE_SIZE));
+      vmm_mmap_range(
+        pagemap, (uintptr_t)mem, prog_header[i].virt_addr,
+        ROUND_UP(misalign + prog_header[i].mem_size, PAGE_SIZE) * PAGE_SIZE,
+        MAP_ANON | MAP_PRIVATE,
+        PROT_READ | PROT_EXEC | ((prog_header->flags & PF_W) ? PROT_WRITE : 0));
+      memcpy((void *)(((uintptr_t)mem + PHYS_MEM_OFFSET + misalign)),
+             (void *)((uintptr_t)buffer + prog_header[i].offset),
+             prog_header[i].file_size);
     }
   }
 

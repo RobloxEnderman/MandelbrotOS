@@ -1,7 +1,42 @@
+#include <signal.h>
 #include <stddef.h>
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+
+char *sys_siglist[] = {
+  [SIGHUP] = "Hangup",
+  [SIGINT] = "Interrupt",
+  [SIGQUIT] = "Quit",
+  [SIGILL] = "Illegal instruction",
+  [SIGTRAP] = "Trace/breakpoint trap",
+  [SIGABRT] = "Aborted",
+  [SIGEMT] = "Emulation trap",
+  [SIGFPE] = "Arithmetic exception",
+  [SIGKILL] = "Killed",
+  [SIGBUS] = "Bus error",
+  [SIGSEGV] = "Segmentation fault",
+  [SIGSYS] = "Bad system call",
+  [SIGPIPE] = "Broken pipe",
+  [SIGALRM] = "Alarm clock",
+  [SIGTERM] = "Terminated",
+  [SIGUSR1] = "User defined signal 1",
+  [SIGUSR2] = "User defined signal 2",
+  [SIGCHLD] = "Child status changed",
+  [SIGPWR] = "Power fail/restart",
+  [SIGWINCH] = "Window size changed",
+  [SIGURG] = "Urgent I/O condition",
+  [SIGPOLL] = "Pollable event occurred",
+  [SIGSTOP] = "Stopped (signal)",
+  [SIGTSTP] = "Stopped (user)",
+  [SIGCONT] = "Continued",
+  [SIGTTIN] = "Stopped (tty input)",
+  [SIGTTOUT] = "Stopped (tty input)",
+  [SIGVTALRM] = "Virtual timer expired",
+  [SIGPROF] = "Profiling timer expired",
+  [SIGXCPU] = "CPU time limit exceeded",
+  [SIGXFSZ] = "File size limit exceeded",
+};
 
 char *strchr(char *str, int c) {
   for (; *str && *str != c; str++)
@@ -92,4 +127,10 @@ size_t strcspn(char *cs, char *ct) {
 char *strpbrk(char *s, char *b) {
   s += strcspn(s, b);
   return *s ? (char *)s : NULL;
+}
+
+char *strsignal(int sig) {
+  if (sig < 0 || sig > 31)
+    return NULL;
+  return sys_siglist[sig];
 }

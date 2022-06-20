@@ -13,11 +13,9 @@
 #define ALIGN_DOWN(__addr, __align) ((__addr) & ~((__align)-1))
 #define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
 
-lock_t vmm_lock = {0};
 pagemap_t kernel_pagemap;
 
-static uint64_t *vmm_get_next_level(uint64_t *table, size_t index,
-                                    uint64_t flags) {
+static inline uint64_t *vmm_get_next_level(uint64_t *table, size_t index) {
   void *ret = NULL;
 
   if (table[index] & 1)
@@ -46,11 +44,13 @@ void vmm_map_page(pagemap_t *pagemap, uintptr_t physical_address,
   size_t pml_entry1 = (size_t)(virtual_address & ((size_t)0x1ff << 12)) >> 12;
 
   uint64_t *pml3 = vmm_get_next_level(
-    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4, flags);
-  uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3, flags);
-  uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2, flags);
+    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4);
+  uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3);
+  uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2);
 
-  *(uint64_t *)((uint64_t)pml1 + pml_entry1 * 8) = physical_address | flags;
+  /* *(uint64_t *)((uint64_t)pml1 + pml_entry1 * 8) = physical_address | flags;
+   */
+  pml1[pml_entry1] = physical_address | flags;
 
   vmm_invalidate_tlb(pagemap, virtual_address);
 
@@ -66,11 +66,12 @@ void vmm_unmap_page(pagemap_t *pagemap, uintptr_t virtual_address) {
   size_t pml_entry1 = (size_t)(virtual_address & ((size_t)0x1ff << 12)) >> 12;
 
   uint64_t *pml3 = vmm_get_next_level(
-    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4, 0b111);
-  uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3, 0b111);
-  uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2, 0b111);
+    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4);
+  uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3);
+  uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2);
 
-  *(uint64_t *)((uint64_t)pml1 + pml_entry1 * 8) = 0;
+  /* *(uint64_t *)((uint64_t)pml1 + pml_entry1 * 8) = 0; */
+  pml1[pml_entry1] = 0;
 
   vmm_invalidate_tlb(pagemap, virtual_address);
 
@@ -84,9 +85,9 @@ uintptr_t vmm_virt_to_phys(pagemap_t *pagemap, uintptr_t virtual_address) {
   size_t pml_entry1 = (size_t)(virtual_address & ((size_t)0x1ff << 12)) >> 12;
 
   uint64_t *pml3 = vmm_get_next_level(
-    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4, 0b111);
-  uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3, 0b111);
-  uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2, 0b111);
+    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4);
+  uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3);
+  uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2);
 
   if (!(pml1[pml_entry1] & 1))
     return 0;
@@ -185,12 +186,12 @@ pagemap_t *vmm_fork_pagemap(pagemap_t *pg) {
                        (range->prot & PROT_WRITE) ? 0b111 : 0b101);
         *new_range = *range;
         new_range->phys_addr = mem;
-        memcpy((void *)mem, (void *)range->phys_addr, range->length);
+        memcpy((void *)(mem + PHYS_MEM_OFFSET),
+               (void *)(range->phys_addr + PHYS_MEM_OFFSET), range->length);
       } else {
         uintptr_t mem = (uintptr_t)vfs_mmap(
           range->file->file, new_pg, range->file, (void *)range->virt_addr,
           range->length, range->offset, range->flags, range->prot);
-
         *new_range = *range;
         new_range->phys_addr = mem;
       }
@@ -248,7 +249,7 @@ int init_vmm() {
   kernel_pagemap.top_level = (uint64_t *)pcalloc(1);
 
   for (uint64_t i = 256; i < 512; i++)
-    vmm_get_next_level(kernel_pagemap.top_level, i, 0b111);
+    vmm_get_next_level(kernel_pagemap.top_level, i);
 
   for (uintptr_t i = PAGE_SIZE; i < 0x100000000; i += PAGE_SIZE) {
     vmm_map_page(&kernel_pagemap, i, i, 0b11);

@@ -180,7 +180,6 @@ int syscall_execve(char *path, char **argv, char **env) {
     return -EACCES;
   }
   vfs_close(file);
-
   return sched_run_program(path, argv, env, "/dev/tty0", "/dev/tty0",
                            "/dev/tty0", 1);
 }
@@ -290,7 +289,7 @@ size_t syscall_getppid() {
   return (CURRENT_PROC->parent) ? CURRENT_PROC->parent->pid : (size_t)-1;
 }
 
-void syscall_exit(int code) { sched_exit(code); }
+void syscall_exit(int code) { sched_exit(code, 0); }
 
 size_t syscall_fork(registers_t *regs) {
   vmm_load_pagemap(&kernel_pagemap);

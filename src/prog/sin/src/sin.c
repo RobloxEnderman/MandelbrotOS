@@ -263,8 +263,7 @@ void main() {
 
       prev_y3 = y;
 
-      /* for (volatile size_t i = 0; i < 7000000; i++) */
-      for (volatile size_t i = 0; i < 100000; i++)
+      for (volatile size_t i = 0; i < 7000000; i++)
         asm volatile("nop");
     }
   }

@@ -7,8 +7,9 @@
 #include <fcntl.h>
 #include <minishell_functions.h>
 #include <stddef.h>
-#include <stdio.h>     // fgets, printf, perror.
-#include <stdlib.h>    // getenv, malloc, free.
+#include <stdio.h>  // fgets, printf, perror.
+#include <stdlib.h> // getenv, malloc, free.
+#include <string.h>
 #include <sys/types.h> // Datatype: pid_t.
 #include <sys/wait.h>  // wait.
 #include <unistd.h>    // access, fork, execve.
@@ -108,6 +109,13 @@ int main(int argc, char *argv[]) {
           }
           if (runBackground == -1)
             wait(&status); // Wait for Children if not running on Background.
+          if (WIFEXITED(status)) {
+            printf("Normal exit with code: %u\n", WEXITSTATUS(status));
+          }
+          if (WIFSIGNALED(status)) {
+            printf("Exited with a signal with sig: %u\n", WTERMSIG(status));
+            printf("Signal recieived: %s\n", strsignal(WTERMSIG(status)));
+          }
         }
 
         // Reestablish stdin and stdout if changed for file redirtection.

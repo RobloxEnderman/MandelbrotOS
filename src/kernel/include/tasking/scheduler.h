@@ -57,6 +57,6 @@ int sched_fork(registers_t *regs);
 int sched_run_program(char *path, char *argv[], char *env[], char *stdin,
                       char *stdout, char *stderr, int replace);
 int sched_waitpid(ssize_t pid, int *status, int options);
-void sched_exit(int code);
+void sched_exit(int code, int crashed);
 
 #endif

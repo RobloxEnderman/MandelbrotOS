@@ -186,6 +186,8 @@ uint32_t fat_get_free_dir_entry_chain(device_t *dev, uint32_t directory,
   uint32_t start = 0;
   uint32_t new_cluster;
 
+  if (!count)
+    return -1;
   for (size_t i = 0; i < count; i++) {
     new_cluster = fat_get_free_dir_entry(dev, directory);
     if (old_cluster)

@@ -26,8 +26,6 @@ ssize_t tty_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   size_t init_count = count;
   while (count) {
     char c = getchar();
-    if (!c)
-      continue;
     putchar(c);
     buf[init_count - count] = c;
     count--;

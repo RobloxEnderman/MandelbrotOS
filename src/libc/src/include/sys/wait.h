@@ -6,12 +6,10 @@
 #define WNOHANG 1
 #define WUNTRACED 2
 
-#define WIFEXITED(s)	(!((s)&0xFF)
-#define WIFSTOPPED(s) (((s)&0xFF) == 0x7F)
-#define WEXITSTATUS(s) (((s) >> 8) & 0xFF)
-#define WTERMSIG(s) ((s)&0x7F)
-#define WSTOPSIG(s) (((s) >> 8) & 0xFF)
-#define WIFSIGNALED(s) (((unsigned int)(s)-1 & 0xFFFF) < 0xFF)
+#define WEXITSTATUS(x) ((x)&0x000000FF)
+#define WIFEXITED(x) ((x)&0x00000200)
+#define WIFSIGNALED(x) ((x)&0x00000400)
+#define WTERMSIG(x) (((x)&0xFF000000) >> 24)
 
 pid_t wait(int *status);
 pid_t waitpid(pid_t pid, int *status, int options);

@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+extern char *sys_siglist[];
+
 char *strchr(char *str, int c);
 size_t strlen(char *s);
 void memcpy(void *dest, void *src, size_t n);
@@ -13,5 +15,6 @@ void *memset(void *buf, char val, size_t len);
 char *strcpy(char *dest, char *src);
 char *strncpy(char *dest, char *src, size_t n);
 char *strpbrk(char *s, char *b);
+char *strsignal(int sig);
 
 #endif
