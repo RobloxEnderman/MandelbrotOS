@@ -171,17 +171,21 @@ ssize_t syscall_write(size_t id, uint8_t *buffer, size_t size) {
 }
 
 int syscall_execve(char *path, char **argv, char **env) {
-  fs_file_t *file = vfs_open((char *)path);
-  if (!file)
-    return -ENOENT;
-  if (vfs_check_can_read(file, CURRENT_THREAD->uid, CURRENT_THREAD->gid) ||
-      vfs_check_can_exec(file, CURRENT_THREAD->uid, CURRENT_THREAD->gid)) {
-    vfs_close(file);
-    return -EACCES;
-  }
-  vfs_close(file);
+  /* fs_file_t *file = vfs_open((char *)path); */
+  /* if (!file) */
+  /* return -ENOENT; */
+  /* if (vfs_check_can_read(file, CURRENT_THREAD->uid, CURRENT_THREAD->gid) ||
+   */
+  /* vfs_check_can_exec(file, CURRENT_THREAD->uid, CURRENT_THREAD->gid)) { */
+  /* vfs_close(file); */
+  /* return -EACCES; */
+  /* } */
+  /* vfs_close(file); */
   return sched_run_program(path, argv, env, "/dev/tty0", "/dev/tty0",
                            "/dev/tty0", 1);
+  /* printf("No code :("); */
+  /* while (1) */
+  /* ; */
 }
 
 void *syscall_mmap(mmap_args_t *args) {
@@ -292,9 +296,9 @@ size_t syscall_getppid() {
 void syscall_exit(int code) { sched_exit(code, 0); }
 
 size_t syscall_fork(registers_t *regs) {
-  vmm_load_pagemap(&kernel_pagemap);
+  /* vmm_load_pagemap(&kernel_pagemap); */
   size_t ret = sched_fork(regs);
-  vmm_load_pagemap(CURRENT_PAGEMAP);
+  /* vmm_load_pagemap(CURRENT_PAGEMAP); */
   return ret;
 }
 
@@ -345,7 +349,12 @@ size_t syscall_seek(size_t fd, ssize_t offset, int type) {
 }
 
 int syscall_waitpid(ssize_t pid, int *status, int options) {
-  return sched_waitpid(pid, status, options);
+  size_t ret = sched_waitpid(pid, status, options);
+  printf("waitpid exit with %lu\n", ret);
+  return ret;
+  /* printf("No code :("); */
+  /* while (1) */
+  /* ; */
 }
 
 int syscall_access(char *path, int mode) {
@@ -463,7 +472,8 @@ int syscall_remove(char *path) {
 uint64_t c_syscall_handler(uint64_t rsp) {
   registers_t *registers = (registers_t *)rsp;
 
-  uint64_t ret = registers->rax;
+  /* uint64_t ret = registers->rax; */
+  uint64_t ret = 0;
 
   switch (registers->rdi) {
     case SYSCALL_OPEN:
@@ -545,6 +555,8 @@ uint64_t c_syscall_handler(uint64_t rsp) {
       ret = -1;
       break;
   }
+
+  /* printf("Just finished syscall number: %lu\n", registers->rdi); */
 
   return ret;
 }

@@ -9,6 +9,7 @@
 #include <string.h>
 #include <sys/syscall.h>
 #include <vec.h>
+#include <assert.h>
 
 #define ALIGN_DOWN(__addr, __align) ((__addr) & ~((__align)-1))
 #define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
@@ -24,6 +25,7 @@ static inline uint64_t *vmm_get_next_level(uint64_t *table, size_t index) {
     ret = pcalloc(1);
     table[index] = (uint64_t)ret | 0b111;
   }
+  assert(ret);
   return ret + PHYS_MEM_OFFSET;
 }
 
@@ -31,7 +33,7 @@ void vmm_invalidate_tlb(pagemap_t *pagemap, uintptr_t virtual_address) {
   uint64_t cr3;
   asm volatile("mov %%cr3, %0" : "=r"(cr3) : : "memory");
   if (cr3 == (uint64_t)pagemap->top_level)
-    asm volatile("invlpg (%0)" : : "r"(virtual_address));
+    asm volatile("invlpg (%0)" : : "r"(virtual_address) : "memory");
 }
 
 void vmm_map_page(pagemap_t *pagemap, uintptr_t physical_address,
@@ -52,7 +54,7 @@ void vmm_map_page(pagemap_t *pagemap, uintptr_t physical_address,
    */
   pml1[pml_entry1] = physical_address | flags;
 
-  vmm_invalidate_tlb(pagemap, virtual_address);
+  /* vmm_invalidate_tlb(pagemap, virtual_address); */
 
   UNLOCK(pagemap->lock);
 }
@@ -73,7 +75,7 @@ void vmm_unmap_page(pagemap_t *pagemap, uintptr_t virtual_address) {
   /* *(uint64_t *)((uint64_t)pml1 + pml_entry1 * 8) = 0; */
   pml1[pml_entry1] = 0;
 
-  vmm_invalidate_tlb(pagemap, virtual_address);
+  /* vmm_invalidate_tlb(pagemap, virtual_address); */
 
   UNLOCK(pagemap->lock);
 }
@@ -146,7 +148,7 @@ void vmm_memcpy(pagemap_t *pagemap_1, uintptr_t virtual_address_1,
 }
 
 void vmm_load_pagemap(pagemap_t *pagemap) {
-  asm volatile("mov %0, %%cr3" : : "a"(pagemap->top_level));
+  asm volatile("mov %0, %%cr3" : : "r"(pagemap->top_level) : "memory");
 }
 
 pagemap_t *vmm_create_new_pagemap() {
@@ -166,15 +168,19 @@ pagemap_t *vmm_create_new_pagemap() {
   return new_map;
 }
 
+#include <printf.h>
+
 pagemap_t *vmm_fork_pagemap(pagemap_t *pg) {
   pagemap_t *new_pg = vmm_create_new_pagemap();
+
+  LOCK(pg->lock);
 
   for (size_t i = 0; i < (size_t)pg->ranges.length; i++) {
     mmap_range_t *range = pg->ranges.data[i];
     mmap_range_t *new_range = kmalloc(sizeof(mmap_range_t));
+    *new_range = *range;
 
     if (range->flags & MAP_SHARED) {
-      *new_range = *range;
       for (size_t j = 0; j < range->length; j += PAGE_SIZE)
         vmm_map_page(new_pg, range->phys_addr + j, range->virt_addr + j,
                      (range->prot & PROT_WRITE) ? 0b111 : 0b101);
@@ -184,22 +190,24 @@ pagemap_t *vmm_fork_pagemap(pagemap_t *pg) {
         for (size_t j = 0; j < range->length; j += PAGE_SIZE)
           vmm_map_page(new_pg, (uintptr_t)mem + j, range->virt_addr + j,
                        (range->prot & PROT_WRITE) ? 0b111 : 0b101);
-        *new_range = *range;
         new_range->phys_addr = mem;
         memcpy((void *)(mem + PHYS_MEM_OFFSET),
                (void *)(range->phys_addr + PHYS_MEM_OFFSET), range->length);
       } else {
-        uintptr_t mem = (uintptr_t)vfs_mmap(
-          range->file->file, new_pg, range->file, (void *)range->virt_addr,
-          range->length, range->offset, range->flags, range->prot);
-        *new_range = *range;
-        new_range->phys_addr = mem;
+        printf("Bad\n");
+        /* uintptr_t mem = (uintptr_t)vfs_mmap( */
+          /* range->file->file, new_pg, range->file, (void *)range->virt_addr, */
+          /* range->length, range->offset, range->flags, range->prot); */
+        /* *new_range = *range; */
+        /* new_range->phys_addr = mem; */
       }
     }
 
     vec_push(&new_pg->ranges, new_range);
   }
 
+  UNLOCK(pg->lock);
+  
   return new_pg;
 }
 

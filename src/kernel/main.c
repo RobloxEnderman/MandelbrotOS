@@ -115,6 +115,8 @@ void k_thread() {
   char *args[] = {"PATH=/prog", NULL};
   sched_run_program("/prog/shell", NULL, args, "/dev/tty0", "/dev/tty0",
                     "/dev/tty0", 0);
+  /* sched_run_program("/prog/trig", NULL, args, "/dev/tty0", "/dev/tty0", */
+  /* "/dev/tty0", 0); */
 
   while (1) {
     /* printf("Thread 1\n"); */

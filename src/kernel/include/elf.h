@@ -53,6 +53,6 @@ typedef struct elf_prog_header {
   uint64_t reserved1;
 } __attribute__((packed)) elf_prog_header_t;
 
-uint8_t elf_run_binary(char *path, pagemap_t *pagemap, uintptr_t *entry);
+int elf_load_binary(char *path, pagemap_t *pagemap, uintptr_t *entry);
 
 #endif

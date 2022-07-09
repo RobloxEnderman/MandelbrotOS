@@ -27,18 +27,18 @@
     (_a_ + (_b_ - 1)) / _b_;                                                   \
   })
 
-char elf_ident[4] = {0x7f, 'E', 'L', 'F'};
+static char elf_ident[4] = {0x7f, 'E', 'L', 'F'};
 
-uint8_t elf_run_binary(char *path, pagemap_t *pagemap, uintptr_t *entry) {
+int elf_load_binary(char *path, pagemap_t *pagemap, uintptr_t *entry) {
   fs_file_t *file = vfs_open(path);
   uint8_t *buffer = kcalloc(file->length);
   vfs_read(file, buffer, 0, file->length);
 
   elf_header_t *header = (elf_header_t *)buffer;
   if (header->type != ELF_EXECUTABLE)
-    return 1;
+    return 0;
   if (memcmp((void *)header->identifier, elf_ident, 4))
-    return 1;
+    return 0;
 
   elf_header_t *elf_header = (elf_header_t *)buffer;
   elf_prog_header_t *prog_header = (void *)(buffer + elf_header->prog_head_off);
@@ -62,5 +62,7 @@ uint8_t elf_run_binary(char *path, pagemap_t *pagemap, uintptr_t *entry) {
   if (entry)
     *entry = elf_header->entry;
 
-  return 0;
+  kfree(buffer);
+
+  return 1;
 }

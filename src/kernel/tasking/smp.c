@@ -34,10 +34,9 @@ void smp_init_cpu(struct stivale2_smp_info *smp_info) {
 
   set_and_load_tss((uintptr_t)&locals->tss);
 
-  memset(locals->last_run_thread_index, 0, PRIORITY_LEVELS * sizeof(size_t));
-  locals->current_thread = NULL, locals->current_priority_peg = 0;
-  locals->current_priority = 0;
   locals->lapic_id = smp_info->lapic_id;
+  locals->last_run_thread_index = 0;
+  locals->current_thread = NULL;
 
   set_locals(locals);
 
