@@ -1,13 +1,11 @@
+#include <drivers/serial.h>
+#include <fb/fb.h>
 #include <lock.h>
+#include <printf.h>
 #include <stdarg.h>
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <string.h>
-
-#include <fb/fb.h>
-#include <lock.h>
-#include <printf.h>
 #include <string.h>
 #include <vprintf.h>
 
@@ -145,6 +143,8 @@ char *__uint_str(uintmax_t i, char b[], int base, bool plusSignIfNeeded,
 
 void displayCharacter(char c, int *a) {
   putchar(c);
+  /* char p[] = {c, 0}; */
+  /* serial_puts(p); */
   *a += 1;
 }
 

@@ -14,7 +14,7 @@ ssize_t tty_write(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   (void)start;
   (void)dev;
   for (size_t i = 0; i < count; i++)
-    putchar(buf[i]);
+    printf("%c", buf[i]);
   return count;
 }
 
@@ -26,7 +26,7 @@ ssize_t tty_read(device_t *dev, size_t start, size_t count, uint8_t *buf) {
   size_t init_count = count;
   while (count) {
     char c = getchar();
-    putchar(c);
+    printf("%c", c);
     buf[init_count - count] = c;
     count--;
     if (c == '\n')

@@ -4,12 +4,16 @@
 
 /**  Durand's Amazing Super Duper Memory functions.  */
 
+#define VERSION "1.1"
 #define ALIGNMENT                                                              \
-  16ul // 4ul				///< This is the byte alignment that memory must be
+  64ul // 4ul				///< This is the byte alignment that memory must be
        // allocated on. IMPORTANT for GTK and other stuff.
 
-#define ALIGN_TYPE char
-#define ALIGN_INFO sizeof(ALIGN_TYPE) * 16
+#define ALIGN_TYPE uintptr_t /// unsigned char[16] /// unsigned short
+#define ALIGN_INFO                                                             \
+  sizeof(ALIGN_TYPE) *                                                         \
+    16 ///< Alignment information is stored right before the pointer. This is
+       ///< the number of bytes of information stored there.
 
 #define USE_CASE1
 #define USE_CASE2

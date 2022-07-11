@@ -15,7 +15,8 @@ CFLAGS := $(CFLAGS) \
 	-fno-pic -no-pie \
 	-fno-stack-protector \
 	-Wno-implicit-fallthrough \
-	-Wno-error=unused-parameter
+	-Wno-error=unused-parameter \
+	-fsanitize=undefined
 
 LDFLAGS := \
 	-static \

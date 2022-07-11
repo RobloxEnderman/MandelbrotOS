@@ -40,6 +40,7 @@ int elf_load_binary(char *path, pagemap_t *pagemap, uintptr_t *entry) {
   if (memcmp((void *)header->identifier, elf_ident, 4))
     return 0;
 
+
   elf_header_t *elf_header = (elf_header_t *)buffer;
   elf_prog_header_t *prog_header = (void *)(buffer + elf_header->prog_head_off);
 

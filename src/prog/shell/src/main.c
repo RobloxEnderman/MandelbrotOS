@@ -84,9 +84,9 @@ int main(int argc, char *argv[]) {
               close(fd[0]);
               close(fd[1]);
             }
-            if (execve(pathName, argv, environ) == -1) {
-              perror(0); // Could not execve.
-            }
+            /* if (execve(pathName, argv, environ) == -1) { */
+              /* perror(0); // Could not execve. */
+            /* } */
             exit(42);
           } else // 2nd cmd of the cmd_line being executed.
           {

@@ -68,7 +68,7 @@ void *pcalloc(size_t pages) {
   if (ret == NULL)
     return NULL;
 
-  memset((void *)((uint64_t)ret + PHYS_MEM_OFFSET), 0, pages * PAGE_SIZE);
+  /* memset((void *)((uint64_t)ret + PHYS_MEM_OFFSET), 0, pages * PAGE_SIZE); */
 
   return ret;
 }

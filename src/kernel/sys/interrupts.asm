@@ -41,7 +41,8 @@ isr_stub:
   pushaq
 
   mov rdi, [rsp + 120]
-  mov rsi, rsp
+  mov rsi, [rsp + 128]
+  mov rdx, rsp
   call c_isr_handler
   
   popaq

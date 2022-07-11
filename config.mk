@@ -10,8 +10,8 @@ KERNEL_BUILD_DIRECTORY := ../../build/kernel/
 PROG_BUILD_DIRECTORY := ../../build/prog/
 DIRECTORY_GUARD = mkdir -p build/
 
-# OPTIMISATION = -O3
-OPTIMISATION = -g
+OPTIMISATION = -O3
+# OPTIMISATION = -g
 
 ASFLAGS = -f elf64 $(OPTIMISATION) -static
 

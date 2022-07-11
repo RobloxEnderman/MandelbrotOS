@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <fb/fb.h>
 #include <fs/vfs.h>
 #include <lock.h>
@@ -9,7 +10,6 @@
 #include <string.h>
 #include <sys/syscall.h>
 #include <vec.h>
-#include <assert.h>
 
 #define ALIGN_DOWN(__addr, __align) ((__addr) & ~((__align)-1))
 #define ALIGN_UP(__addr, __align) (((__addr) + (__align)-1) & ~((__align)-1))
@@ -25,8 +25,7 @@ static inline uint64_t *vmm_get_next_level(uint64_t *table, size_t index) {
     ret = pcalloc(1);
     table[index] = (uint64_t)ret | 0b111;
   }
-  assert(ret);
-  return ret + PHYS_MEM_OFFSET;
+  return (void *)((uintptr_t)ret + PHYS_MEM_OFFSET);
 }
 
 void vmm_invalidate_tlb(pagemap_t *pagemap, uintptr_t virtual_address) {
@@ -46,7 +45,7 @@ void vmm_map_page(pagemap_t *pagemap, uintptr_t physical_address,
   size_t pml_entry1 = (size_t)(virtual_address & ((size_t)0x1ff << 12)) >> 12;
 
   uint64_t *pml3 = vmm_get_next_level(
-    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4);
+    (void *)((uintptr_t)pagemap->top_level + PHYS_MEM_OFFSET), pml_entry4);
   uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3);
   uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2);
 
@@ -54,7 +53,7 @@ void vmm_map_page(pagemap_t *pagemap, uintptr_t physical_address,
    */
   pml1[pml_entry1] = physical_address | flags;
 
-  /* vmm_invalidate_tlb(pagemap, virtual_address); */
+  vmm_invalidate_tlb(pagemap, virtual_address);
 
   UNLOCK(pagemap->lock);
 }
@@ -75,7 +74,7 @@ void vmm_unmap_page(pagemap_t *pagemap, uintptr_t virtual_address) {
   /* *(uint64_t *)((uint64_t)pml1 + pml_entry1 * 8) = 0; */
   pml1[pml_entry1] = 0;
 
-  /* vmm_invalidate_tlb(pagemap, virtual_address); */
+  vmm_invalidate_tlb(pagemap, virtual_address);
 
   UNLOCK(pagemap->lock);
 }
@@ -87,7 +86,7 @@ uintptr_t vmm_virt_to_phys(pagemap_t *pagemap, uintptr_t virtual_address) {
   size_t pml_entry1 = (size_t)(virtual_address & ((size_t)0x1ff << 12)) >> 12;
 
   uint64_t *pml3 = vmm_get_next_level(
-    (void *)pagemap->top_level + PHYS_MEM_OFFSET, pml_entry4);
+    (void *)((uintptr_t)pagemap->top_level + PHYS_MEM_OFFSET), pml_entry4);
   uint64_t *pml2 = vmm_get_next_level(pml3, pml_entry3);
   uint64_t *pml1 = vmm_get_next_level(pml2, pml_entry2);
 
@@ -100,51 +99,9 @@ uintptr_t vmm_virt_to_phys(pagemap_t *pagemap, uintptr_t virtual_address) {
 uintptr_t vmm_get_kernel_address(pagemap_t *pagemap,
                                  uintptr_t virtual_address) {
   uintptr_t aligned_virtual_address = ALIGN_DOWN(virtual_address, PAGE_SIZE);
-  uintptr_t phys_addr = vmm_virt_to_phys(pagemap, virtual_address);
+  uintptr_t phys_addr = vmm_virt_to_phys(pagemap, aligned_virtual_address);
   return (phys_addr + PHYS_MEM_OFFSET + virtual_address -
           aligned_virtual_address);
-}
-
-void vmm_memcpy(pagemap_t *pagemap_1, uintptr_t virtual_address_1,
-                pagemap_t *pagemap_2, uintptr_t virtual_address_2,
-                size_t count) {
-  uintptr_t aligned_virtual_address_1 =
-    ALIGN_DOWN(virtual_address_1, PAGE_SIZE);
-  uintptr_t aligned_virtual_address_2 =
-    ALIGN_DOWN(virtual_address_2, PAGE_SIZE);
-
-  uint8_t *phys_addr_1 =
-    (uint8_t *)vmm_virt_to_phys(pagemap_1, aligned_virtual_address_1);
-  uint8_t *phys_addr_2 =
-    (uint8_t *)vmm_virt_to_phys(pagemap_2, aligned_virtual_address_2);
-
-  size_t align_difference_1 = virtual_address_1 - aligned_virtual_address_1;
-  size_t align_difference_2 = virtual_address_2 - aligned_virtual_address_2;
-
-  for (size_t i = 0; i < count; i++) {
-    *(phys_addr_1 + PHYS_MEM_OFFSET + align_difference_1) =
-      *(phys_addr_2 + PHYS_MEM_OFFSET + align_difference_2);
-
-    if (!((++align_difference_1 + 1) % PAGE_SIZE)) {
-      align_difference_1 = 0;
-
-      virtual_address_1 += PAGE_SIZE;
-
-      aligned_virtual_address_1 = ALIGN_DOWN(virtual_address_1, PAGE_SIZE);
-      phys_addr_1 =
-        (uint8_t *)vmm_virt_to_phys(pagemap_1, aligned_virtual_address_1);
-    }
-
-    if (!((++align_difference_2 + 1) % PAGE_SIZE)) {
-      align_difference_2 = 0;
-
-      virtual_address_2 += PAGE_SIZE;
-
-      aligned_virtual_address_2 = ALIGN_DOWN(virtual_address_2, PAGE_SIZE);
-      phys_addr_2 =
-        (uint8_t *)vmm_virt_to_phys(pagemap_2, aligned_virtual_address_2);
-    }
-  }
 }
 
 void vmm_load_pagemap(pagemap_t *pagemap) {
@@ -156,9 +113,9 @@ pagemap_t *vmm_create_new_pagemap() {
   new_map->top_level = pcalloc(1);
 
   uint64_t *kernel_top =
-    (uint64_t *)((void *)kernel_pagemap.top_level + PHYS_MEM_OFFSET);
+    (uint64_t *)((uintptr_t)kernel_pagemap.top_level + PHYS_MEM_OFFSET);
   uint64_t *user_top =
-    (uint64_t *)((void *)new_map->top_level + PHYS_MEM_OFFSET);
+    (uint64_t *)((uintptr_t)new_map->top_level + PHYS_MEM_OFFSET);
 
   for (uintptr_t i = 256; i < 512; i++)
     user_top[i] = kernel_top[i];
@@ -171,6 +128,8 @@ pagemap_t *vmm_create_new_pagemap() {
 #include <printf.h>
 
 pagemap_t *vmm_fork_pagemap(pagemap_t *pg) {
+  /* vmm_load_pagemap(&kernel_pagemap); */
+  printf("Forking pagemap");
   pagemap_t *new_pg = vmm_create_new_pagemap();
 
   LOCK(pg->lock);
@@ -178,6 +137,7 @@ pagemap_t *vmm_fork_pagemap(pagemap_t *pg) {
   for (size_t i = 0; i < (size_t)pg->ranges.length; i++) {
     mmap_range_t *range = pg->ranges.data[i];
     mmap_range_t *new_range = kmalloc(sizeof(mmap_range_t));
+    range->length = ALIGN_DOWN(range->length, PAGE_SIZE);
     *new_range = *range;
 
     if (range->flags & MAP_SHARED) {
@@ -187,27 +147,35 @@ pagemap_t *vmm_fork_pagemap(pagemap_t *pg) {
     } else {
       if (range->flags & MAP_ANON) {
         uintptr_t mem = (uintptr_t)pcalloc(range->length / PAGE_SIZE);
+        assert(mem);
         for (size_t j = 0; j < range->length; j += PAGE_SIZE)
           vmm_map_page(new_pg, (uintptr_t)mem + j, range->virt_addr + j,
                        (range->prot & PROT_WRITE) ? 0b111 : 0b101);
+        /* memcpy((void *)(mem + PHYS_MEM_OFFSET), */
+               /* (void *)(range->phys_addr + PHYS_MEM_OFFSET), 1); */
         new_range->phys_addr = mem;
-        memcpy((void *)(mem + PHYS_MEM_OFFSET),
-               (void *)(range->phys_addr + PHYS_MEM_OFFSET), range->length);
-      } else {
-        printf("Bad\n");
-        /* uintptr_t mem = (uintptr_t)vfs_mmap( */
-          /* range->file->file, new_pg, range->file, (void *)range->virt_addr, */
-          /* range->length, range->offset, range->flags, range->prot); */
-        /* *new_range = *range; */
-        /* new_range->phys_addr = mem; */
-      }
+        printf("New memory: %lx\n", mem);
+        printf("New range p:%lx v:%lx l:%lx\n", range->phys_addr, range->virt_addr, range->length);
+
+        for (size_t i = 0; i < range->length; i++)
+          ((uint8_t *)(mem + PHYS_MEM_OFFSET))[i] = ((uint8_t *)(range->phys_addr + PHYS_MEM_OFFSET))[i];
+      } /* else { */
+        /* printf("Bad\n"); */
+        /* [> uintptr_t mem = (uintptr_t)vfs_mmap( <] */
+        /* [> range->file->file, new_pg, range->file, (void *)range->virt_addr, <] */
+        /* [> range->length, range->offset, range->flags, range->prot); <] */
+        /* [> *new_range = *range; <] */
+        /* [> new_range->phys_addr = mem; <] */
+      /* } */
     }
 
     vec_push(&new_pg->ranges, new_range);
   }
 
   UNLOCK(pg->lock);
-  
+
+  /* vmm_load_pagemap(pg); */
+
   return new_pg;
 }
 
@@ -259,7 +227,7 @@ int init_vmm() {
   for (uint64_t i = 256; i < 512; i++)
     vmm_get_next_level(kernel_pagemap.top_level, i);
 
-  for (uintptr_t i = PAGE_SIZE; i < 0x100000000; i += PAGE_SIZE) {
+  for (uintptr_t i = PAGE_SIZE; i < 0x200000000; i += PAGE_SIZE) {
     vmm_map_page(&kernel_pagemap, i, i, 0b11);
     vmm_map_page(&kernel_pagemap, i, i + PHYS_MEM_OFFSET, 0b11);
   }

@@ -119,12 +119,14 @@ int init_isr() {
   return 0;
 }
 
-void c_isr_handler(uint64_t ex_no, uint64_t rsp) {
+void c_isr_handler(uint64_t ex_no, uint64_t err, uint64_t rsp) {
   vmm_load_pagemap(&kernel_pagemap);
 
 #ifdef DEBUG_FAULTS
   printf("\nCPU %lu: %s at %lx\n", get_locals()->cpu_number,
          exception_messages[ex_no], ((registers_t *)rsp)->rip);
+  printf("PID: %lu\n", get_locals()->current_thread->parent->pid);
+  printf("Err: %lu\n", err);
 
   printf("Stack trace:\n%lx\n", ((registers_t *)rsp)->rip);
   uint64_t rbp = ((registers_t *)rsp)->rbp;

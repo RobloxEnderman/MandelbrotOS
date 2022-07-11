@@ -9,7 +9,7 @@
 int pipe_init(pipe_t *pipe, size_t capacity) {
   if (!pipe)
     return 1;
-  pipe->buffer = kmalloc(capacity * sizeof(char *));
+  pipe->buffer = kcalloc(capacity * sizeof(char *));
   pipe->buffer_end = (char *)pipe->buffer + capacity * sizeof(char *);
   pipe->head = pipe->buffer;
   pipe->tail = pipe->buffer;

@@ -35,9 +35,6 @@ pagemap_t *vmm_fork_pagemap(pagemap_t *pg);
 void vmm_map_page(pagemap_t *pagemap, uintptr_t physical_address,
                   uintptr_t virtual_address, uint64_t flags);
 void vmm_unmap_page(pagemap_t *pagemap, uintptr_t virtual_address);
-void vmm_memcpy(pagemap_t *pagemap_1, uintptr_t virtual_address_1,
-                pagemap_t *pagemap_2, uintptr_t virtual_address_2,
-                size_t count);
 uintptr_t vmm_virt_to_phys(pagemap_t *pagemap, uintptr_t virtual_address);
 uintptr_t vmm_get_kernel_address(pagemap_t *pagemap, uintptr_t virtual_address);
 void vmm_destroy_pagemap(pagemap_t *pagemap);

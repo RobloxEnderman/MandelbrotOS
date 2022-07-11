@@ -349,12 +349,15 @@ size_t syscall_seek(size_t fd, ssize_t offset, int type) {
 }
 
 int syscall_waitpid(ssize_t pid, int *status, int options) {
-  size_t ret = sched_waitpid(pid, status, options);
-  printf("waitpid exit with %lu\n", ret);
-  return ret;
+  /* size_t ret = sched_waitpid(pid, status, options); */
+  /* printf("waitpid exit with %lu\n", ret); */
+  /* return ret; */
   /* printf("No code :("); */
   /* while (1) */
   /* ; */
+  printf("waitpid\n");
+  *status = 0x200 | 69;
+  return 0;
 }
 
 int syscall_access(char *path, int mode) {
@@ -471,6 +474,7 @@ int syscall_remove(char *path) {
 
 uint64_t c_syscall_handler(uint64_t rsp) {
   registers_t *registers = (registers_t *)rsp;
+  /* printf("Just finished syscall number: %lu\n", registers->rdi); */
 
   /* uint64_t ret = registers->rax; */
   uint64_t ret = 0;
@@ -555,8 +559,6 @@ uint64_t c_syscall_handler(uint64_t rsp) {
       ret = -1;
       break;
   }
-
-  /* printf("Just finished syscall number: %lu\n", registers->rdi); */
 
   return ret;
 }

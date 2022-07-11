@@ -43,9 +43,9 @@ void *acpi_get_table(char *signature, int index) {
 
   for (size_t t = 0; t < entries; t++) {
     if (!xsdt)
-      h = (sdt_t *)(uint64_t)(rsdt->sptr[t] + PHYS_MEM_OFFSET);
+      h = (sdt_t *)((uintptr_t)rsdt->sptr[t] + PHYS_MEM_OFFSET);
     else
-      h = (sdt_t *)(uint64_t)(xsdt->sptr[t] + PHYS_MEM_OFFSET);
+      h = (sdt_t *)((uintptr_t)xsdt->sptr[t] + PHYS_MEM_OFFSET);
 
     if (!strncmp(signature, h->signature, 4)) {
       if (acpi_do_checksum(h) && i == index)
